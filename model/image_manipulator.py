@@ -3,8 +3,8 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QLabel, QVBox
 from PyQt5.QtGui import QPixmap, QImage, QKeySequence
 from PyQt5.QtCore import Qt, QTimer
 
-import model.image_effect as image_effect
-import model.gui_parts as gui_parts
+from model import image_effect
+from model.gui_parts import Tabs, Radio
 from model.file_handler import FileHandler
 
 media_width, media_height = 500, 400
@@ -36,9 +36,9 @@ class ImageManipulator(QMainWindow):
         self.view.setScene(self.scene)
 
         tabs = QTabWidget()
-        tabs.addTab(gui_parts.Tabs(self).image, "Image")
-        tabs.addTab(gui_parts.Tabs(self).video, "Video")
-        tabs.addTab(gui_parts.Tabs(self).stream, "Stream")
+        tabs.addTab(Tabs(self).image, "Image")
+        tabs.addTab(Tabs(self).video, "Video")
+        tabs.addTab(Tabs(self).stream, "Stream")
 
         self.image_label = QLabel()
         self.image_pixmap = None
@@ -50,7 +50,7 @@ class ImageManipulator(QMainWindow):
         self.layoutRoot.addWidget(tabs)
 
         for i, effect in enumerate(self.EFFECTS, start=0):
-            effectlayout.addWidget(gui_parts.Radio(self, effect, i))
+            effectlayout.addWidget(Radio(self, effect, i))
         
         self.layoutRoot.addLayout(layoutGrid)
         self.layoutRoot.addLayout(effectlayout)
