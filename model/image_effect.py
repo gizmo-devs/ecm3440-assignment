@@ -1,28 +1,21 @@
-from PyQt5.QtWidgets import QRadioButton
+import cv2 as cv
 
-class Radio(QRadioButton):
-    def __init__(self, group_name):
-        super().__init__()
-
-        self.group = group_name
-        self.clicked.connect(lambda: self.toggle_effect(0))
+def apply_effect(app, input):
+    if app.effect == 1:
+        # blur
+        blur = cv.blur(input,(5,5))
+        return cv.cvtColor(blur,cv.COLOR_BGR2RGB)
+    if app.effect == 2:
+        # grey
+        gray = cv.cvtColor(input, cv.COLOR_BGR2GRAY)
+        return cv.cvtColor(gray,cv.COLOR_BGR2RGB)
+    if app.effect == 3:
+        # Canny
+        edges = cv.Canny(input,100,200)
+        return cv.cvtColor(edges,cv.COLOR_BGR2RGB)
+    if app.effect == 4:
+        # Sobel
+        gsobel = cv.Sobel(input,cv.CV_8U,1,0,ksize=3)
+        return cv.cvtColor(gsobel,cv.COLOR_BGR2RGB)
     
-        # EffectNone = QRadioButton("None")
-        # EffectNone.group = "Effect"
-        # EffectNone.clicked.connect(lambda: self.toggle_effect(0))
-
-        # EffectBlur = QRadioButton("Blur")
-        # EffectBlur.group = "Effect"
-        # EffectBlur.clicked.connect(lambda: self.toggle_effect(1))
-        
-        # EffectGrey = QRadioButton("Grey")
-        # EffectGrey.group = "Effect"
-        # EffectGrey.clicked.connect(lambda: self.toggle_effect(2))
-
-        # EffectCanny = QRadioButton("Canny")
-        # EffectCanny.group = "Effect"
-        # EffectCanny.clicked.connect(lambda: self.toggle_effect(3))
-        
-        # EffectSobel = QRadioButton("Sobel")
-        # EffectSobel.group = "Effect"
-        # EffectSobel.clicked.connect(lambda: self.toggle_effect(4))
+    return cv.cvtColor(input, cv.COLOR_BGR2RGB)

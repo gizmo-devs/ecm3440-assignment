@@ -1,17 +1,25 @@
 import cv2 as cv
-from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QLabel, QVBoxLayout, QHBoxLayout, QGridLayout, QPushButton, QWidget, QRadioButton, QGraphicsView, QGraphicsScene, QShortcut
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QLabel, QVBoxLayout, QHBoxLayout, QGridLayout, QWidget, QGraphicsView, QGraphicsScene, QShortcut
 from PyQt5.QtGui import QPixmap, QImage, QKeySequence
-from PIL import Image
 from PyQt5.QtCore import Qt, QTimer
-from numpy import array
 
-# import model.image_effect as image_effect
+import model.image_effect as image_effect
+import model.gui_parts as gui_parts
+from model.file_handler import FileHandler
 
 media_width, media_height = 500, 400
 
 class ImageManipulator(QMainWindow):
     def __init__(self):
         super().__init__()
+
+        self.EFFECTS = [
+            "None", 
+            "Blur", 
+            "Grey", 
+            "Canny", 
+            "Sobel"
+        ]
 
         self.initUI()
 
@@ -27,20 +35,10 @@ class ImageManipulator(QMainWindow):
         self.scene = QGraphicsScene(self)
         self.view.setScene(self.scene)
 
-        self.open_button = QPushButton('Open Image', self)
-        self.open_button.clicked.connect(self.open_image)
-
-        self.save_button = QPushButton('Save Image', self)
-        self.save_button.clicked.connect(self.save_image)
-        self.save_button.setEnabled(False)
-
-        self.start_webcam_button = QPushButton('Start Webcam', self)
-        self.start_webcam_button.clicked.connect(self.start_webcam)
-        self.start_webcam_button.setEnabled(True)
-
-        self.stop_webcam_button = QPushButton('Stop Webcam', self)
-        self.stop_webcam_button.clicked.connect(self.stop_webcam)
-        self.stop_webcam_button.setEnabled(False)
+        tabs = QTabWidget()
+        tabs.addTab(gui_parts.Tabs(self).image, "Image")
+        tabs.addTab(gui_parts.Tabs(self).video, "Video")
+        tabs.addTab(gui_parts.Tabs(self).stream, "Stream")
 
         self.image_label = QLabel()
         self.image_pixmap = None
@@ -49,39 +47,10 @@ class ImageManipulator(QMainWindow):
         layoutGrid = QGridLayout()
         effectlayout = QHBoxLayout()
         
-        layoutGrid.addWidget(self.open_button, 1,1)
-        layoutGrid.addWidget(self.save_button, 1,2)
-        layoutGrid.addWidget(self.start_webcam_button, 2,1)
-        layoutGrid.addWidget(self.stop_webcam_button, 2,2)
+        self.layoutRoot.addWidget(tabs)
 
-        # for effect in ["None", "Blur", "Grey", "Canny", "Sobel"]:
-        #     effectlayout.addWidget(effect.Radio(effect))
-
-        EffectNone = QRadioButton("None")
-        EffectNone.group = "Effect"
-        EffectNone.clicked.connect(lambda: self.toggle_effect(0))
-
-        EffectBlur = QRadioButton("Blur")
-        EffectBlur.group = "Effect"
-        EffectBlur.clicked.connect(lambda: self.toggle_effect(1))
-        
-        EffectGrey = QRadioButton("Grey")
-        EffectGrey.group = "Effect"
-        EffectGrey.clicked.connect(lambda: self.toggle_effect(2))
-
-        EffectCanny = QRadioButton("Canny")
-        EffectCanny.group = "Effect"
-        EffectCanny.clicked.connect(lambda: self.toggle_effect(3))
-        
-        EffectSobel = QRadioButton("Sobel")
-        EffectSobel.group = "Effect"
-        EffectSobel.clicked.connect(lambda: self.toggle_effect(4))
-
-        effectlayout.addWidget(EffectNone)
-        effectlayout.addWidget(EffectBlur)
-        effectlayout.addWidget(EffectGrey)
-        effectlayout.addWidget(EffectCanny)
-        effectlayout.addWidget(EffectSobel)
+        for i, effect in enumerate(self.EFFECTS, start=0):
+            effectlayout.addWidget(gui_parts.Radio(self, effect, i))
         
         self.layoutRoot.addLayout(layoutGrid)
         self.layoutRoot.addLayout(effectlayout)
@@ -99,25 +68,9 @@ class ImageManipulator(QMainWindow):
         self.effect = None
         self.raw_image = None
 
-    def apply_effect(self, input):
-        if self.effect == 1:
-            # blur
-            blur = cv.blur(input,(5,5))
-            return cv.cvtColor(blur,cv.COLOR_BGR2RGB)
-        if self.effect == 2:
-            # grey
-            gray = cv.cvtColor(input, cv.COLOR_BGR2GRAY)
-            return cv.cvtColor(gray,cv.COLOR_BGR2RGB)
-        if self.effect == 3:
-            # Canny
-            edges = cv.Canny(input,100,200)
-            return cv.cvtColor(edges,cv.COLOR_BGR2RGB)
-        if self.effect == 4:
-            # Sobel
-            gsobel = cv.Sobel(input,cv.CV_8U,1,0,ksize=3)
-            return cv.cvtColor(gsobel,cv.COLOR_BGR2RGB)
-            
-        return cv.cvtColor(input, cv.COLOR_BGR2RGB)
+        self.is_recording = False
+        self.video_writer = None
+        self.video_player = None
     
     def toggle_effect(self, effect):
         self.effect=effect
@@ -125,7 +78,7 @@ class ImageManipulator(QMainWindow):
         if not self.webcam:
             height, width, channel = self.raw_image.shape
             bytes_per_line = 3 * width
-            adjusted_img = self.apply_effect(self.raw_image)
+            adjusted_img = image_effect.apply_effect(self, self.raw_image)
             q_image = QImage(adjusted_img, width, height, bytes_per_line, QImage.Format_RGB888)
             self.image_pixmap = QPixmap.fromImage(q_image)
         self.update_preview()
@@ -134,9 +87,7 @@ class ImageManipulator(QMainWindow):
         self.image_label.setPixmap(self.image_pixmap)
 
     def open_image(self):
-        options = QFileDialog.Options()
-        options |= QFileDialog.ReadOnly
-        file_name, _ = QFileDialog.getOpenFileName(self, 'Open Image', '', 'Image Files (*.png *.jpg *.jpeg *.gif *.bmp *.tiff)', options=options)
+        file_name = FileHandler(self, "Img").openDialog()
 
         if file_name:
             self.raw_image = cv.imread(cv.samples.findFile(file_name))
@@ -172,16 +123,74 @@ class ImageManipulator(QMainWindow):
             height, width, channel = frame.shape
             bytes_per_line = 3 * width
             if self.effect:
-                frame.data = self.apply_effect(frame)
+                frame.data = image_effect.apply_effect(self, frame)
             q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
             self.image_pixmap = QPixmap.fromImage(q_image)
             self.update_preview()
 
     def save_image(self):
         if self.image_pixmap:
-            options = QFileDialog.Options()
-            options |= QFileDialog.ReadOnly
-            file_name, _ = QFileDialog.getSaveFileName(self, 'Save Image', '', 'Image Files (*.png *.jpg *.jpeg *.gif *.bmp *.tiff)', options=options)
-
+            # options = QFileDialog.Options()
+            # options |= QFileDialog.ReadOnly
+            # file_name, _ = QFileDialog.getSaveFileName(self, 'Save Image', '', 'Image Files (*.png *.jpg *.jpeg *.gif *.bmp *.tiff)', options=options)
+            file_name = FileHandler(self, "Img").saveDialog()
             if file_name:
                 self.image_pixmap.save(file_name)
+
+    def record_video(self):
+        if not self.is_recording:
+            file_name = FileHandler(self, "Vid").saveDialog()
+            self.initCamera()
+            if file_name:
+                fourcc = cv.VideoWriter_fourcc(*'XVID')  # Codec for AVI format
+                self.video_writer = cv.VideoWriter(file_name, fourcc, 20.0, (640, 480))
+                self.is_recording = True
+                self.record_button.setText('Stop Recording')
+        else:
+            if self.video_writer:
+                self.video_writer.release()
+                self.is_recording = False
+                self.record_button.setText('Record Video')
+                self.play_button.setEnabled(True)  # Enable the "Play Video" button after recording
+
+    def play_video(self):
+        if self.is_recording and self.video_writer:
+            self.video_player = cv.VideoCapture(self.video_writer.get_filename())
+            self.play_button.setEnabled(False)  # Disable "Play Video" during playback
+
+            if self.video_player.isOpened():
+                while True:
+                    ret, frame = self.video_player.read()
+                    if not ret:
+                        break
+
+                    height, width, channel = frame.shape
+                    bytes_per_line = 3 * width
+                    q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
+                    pixmap = QPixmap.fromImage(q_image)
+                    self.image_label.setPixmap(pixmap)
+                    QApplication.processEvents()  # Allow GUI updates
+                self.video_player.release()
+                self.play_button.setEnabled(True)  # Enable "Play Video" after playback
+
+    def open_saved_video(self):
+        file_name = FileHandler(self, "Vid").openDialog()
+        # file_name, _ = QFileDialog.getOpenFileName(self, 'Open Video', '', 'Video Files (*.avi *.mp4)')
+        if file_name:
+            self.video_player = cv.VideoCapture(file_name)
+            self.play_button.setEnabled(False)  # Disable "Play Video" during playback
+
+            if self.video_player.isOpened():
+                while True:
+                    ret, frame = self.video_player.read()
+                    if not ret:
+                        break
+
+                    height, width, channel = frame.shape
+                    bytes_per_line = 3 * width
+                    q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
+                    pixmap = QPixmap.fromImage(q_image)
+                    self.image_label.setPixmap(pixmap)
+                    QApplication.processEvents()  # Allow GUI updates
+                self.video_player.release()
+                self.play_button.setEnabled(True)  # Enable "Play Video" after playback
