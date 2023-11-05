@@ -3,9 +3,11 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QLabel, QVBox
 from PyQt5.QtGui import QPixmap, QImage, QKeySequence
 from PyQt5.QtCore import Qt, QTimer
 
-from model import image_effect
-from model.gui_parts import Tabs, Radio
+from model.image_effect import apply_effect
+from model.gui_parts import Tabs, Radio, Widgit
 from model.file_handler import FileHandler
+
+from os import path
 
 media_width, media_height = 500, 400
 
@@ -14,20 +16,32 @@ class ImageManipulator(QMainWindow):
         super().__init__()
 
         self.EFFECTS = [
-            "None", 
-            "Blur", 
-            "Grey", 
-            "Canny", 
-            "Sobel"
+            {"id":0, "name":"None", "controler_type": "checkbox"}, 
+            {"id":1,"name":"Blur", "controler_type": "checkbox"}, 
+            {"id":2,"name":"Grey", "controler_type": "checkbox"}, 
+            {"id":3,"name":"Canny", "controler_type": "checkbox"}, 
+            {"id":4,"name":"Sobel", "controler_type": "checkbox"},
+            {"id":5,"name":"Mask Faces", "controler_type": "checkbox"}
         ]
 
         self.initUI()
+
+        cssFile="ubuntu.theme"
+        with open(cssFile,"r") as fh:
+            self.setStyleSheet(fh.read())
+
+        cascadePath = "helperfiles/haarcascade_frontalface_alt.xml"
+        if not path.exists(cascadePath):
+            print(f"Cannot find file {cascadePath}")
+            exit("Cannot find Face recognition")
+        self.faceCascade = cv.CascadeClassifier(cascadePath)
+
 
     def initUI(self):
         self.setGeometry(100, 100, 800, 600)
         self.setWindowTitle('Image Manipulation')
 
-        self.quitSc = QShortcut(QKeySequence('Ctrl+Q'), self)
+        self.quitSc = QShortcut(QKeySequence('Esc'), self)
         self.quitSc.activated.connect(QApplication.instance().quit)
 
         # Create widgets
@@ -35,25 +49,44 @@ class ImageManipulator(QMainWindow):
         self.scene = QGraphicsScene(self)
         self.view.setScene(self.scene)
 
-        tabs = QTabWidget()
-        tabs.addTab(Tabs(self).image, "Image")
-        tabs.addTab(Tabs(self).video, "Video")
-        tabs.addTab(Tabs(self).stream, "Stream")
-
         self.image_label = QLabel()
         self.image_pixmap = None
 
-        self.layoutRoot = QVBoxLayout()
-        layoutGrid = QGridLayout()
-        effectlayout = QHBoxLayout()
-        
-        self.layoutRoot.addWidget(tabs)
+        self.webcam = None
+        self.timer = None
+        self.effect = []
+        self.raw_image = None
 
+        self.facedetection = None
+        self.faceCascade = None
+
+        self.is_recording = False
+        self.video_writer = None
+        self.video_player = None
+
+        # Layouts
+        # self.layoutRoot = QVBoxLayout()
+        self.layoutRoot = QHBoxLayout()
+        controLayout = QVBoxLayout()
+        effectlayout = QVBoxLayout()
+
+        # Layout.tabs
+        tabs = QTabWidget()
+        tabs.setFixedWidth(200)
+
+        tabs.addTab(Tabs(self).image, "Image")
+        tabs.addTab(Tabs(self).video, "Video")
+        tabs.addTab(Tabs(self).stream, "Stream")
+        controLayout.addWidget(tabs)
+
+        # Layout.effects
         for i, effect in enumerate(self.EFFECTS, start=0):
-            effectlayout.addWidget(Radio(self, effect, i))
+            effectlayout.addWidget(Widgit(effect, self).init())
         
-        self.layoutRoot.addLayout(layoutGrid)
-        self.layoutRoot.addLayout(effectlayout)
+        controLayout.addLayout(effectlayout)
+        controLayout.addStretch()
+
+        self.layoutRoot.addLayout(controLayout)
 
         self.layoutRoot.addWidget(self.image_label)
         self.layoutRoot.addWidget(self.view)
@@ -62,25 +95,21 @@ class ImageManipulator(QMainWindow):
         self.container.setLayout(self.layoutRoot)
 
         self.setCentralWidget(self.container)
-
-        self.webcam = None
-        self.timer = None
-        self.effect = None
-        self.raw_image = None
-
-        self.is_recording = False
-        self.video_writer = None
-        self.video_player = None
+        
     
     def toggle_effect(self, effect):
-        self.effect=effect
-        print(f"Updated effect = {effect}")
-        if not self.webcam:
-            height, width, channel = self.raw_image.shape
-            bytes_per_line = 3 * width
-            adjusted_img = image_effect.apply_effect(self, self.raw_image)
-            q_image = QImage(adjusted_img, width, height, bytes_per_line, QImage.Format_RGB888)
-            self.image_pixmap = QPixmap.fromImage(q_image)
+        if effect in self.effect:
+            print(f"effect removed = {effect}")
+            self.effect.remove(effect)
+        else:
+            self.effect.append(effect)
+            print(f"effect added = {effect}")
+            if not self.webcam:
+                height, width, channel = self.raw_image.shape
+                bytes_per_line = 3 * width
+                adjusted_img = apply_effect(self, self.raw_image)
+                q_image = QImage(adjusted_img, width, height, bytes_per_line, QImage.Format_RGB888)
+                self.image_pixmap = QPixmap.fromImage(q_image)
         self.update_preview()
     
     def update_preview(self):
@@ -122,17 +151,13 @@ class ImageManipulator(QMainWindow):
         if ret:
             height, width, channel = frame.shape
             bytes_per_line = 3 * width
-            if self.effect:
-                frame.data = image_effect.apply_effect(self, frame)
+            frame.data = apply_effect(self, frame)
             q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
             self.image_pixmap = QPixmap.fromImage(q_image)
             self.update_preview()
 
     def save_image(self):
         if self.image_pixmap:
-            # options = QFileDialog.Options()
-            # options |= QFileDialog.ReadOnly
-            # file_name, _ = QFileDialog.getSaveFileName(self, 'Save Image', '', 'Image Files (*.png *.jpg *.jpeg *.gif *.bmp *.tiff)', options=options)
             file_name = FileHandler(self, "Img").saveDialog()
             if file_name:
                 self.image_pixmap.save(file_name)
@@ -175,7 +200,6 @@ class ImageManipulator(QMainWindow):
 
     def open_saved_video(self):
         file_name = FileHandler(self, "Vid").openDialog()
-        # file_name, _ = QFileDialog.getOpenFileName(self, 'Open Video', '', 'Video Files (*.avi *.mp4)')
         if file_name:
             self.video_player = cv.VideoCapture(file_name)
             self.play_button.setEnabled(False)  # Disable "Play Video" during playback

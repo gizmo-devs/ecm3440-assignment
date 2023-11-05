@@ -1,7 +1,20 @@
-from PyQt5.QtWidgets import QMainWindow, QRadioButton, QWidget, QVBoxLayout, QPushButton
+from PyQt5.QtWidgets import QMainWindow, QRadioButton, QWidget, QVBoxLayout, QPushButton, QCheckBox
+
+class Widgit:
+    def __init__(self, conf, app):
+        self.conf = conf
+        self.app = app
+
+    def init(self):
+        match self.conf.get("controler_type"):
+            case "radio":
+                return Radio(self.app, self.conf)
+            case "checkbox":
+                return Checkbox(self.app, self.conf)
+        
 
 class Radio(QRadioButton):
-    def __init__(self, app: QMainWindow, effect: str, effect_index: int) -> None:
+    def __init__(self, app: QMainWindow, conf) -> None:
         """_summary_
 
         Args:
@@ -11,9 +24,25 @@ class Radio(QRadioButton):
         """
         super().__init__()
 
-        self.setText(effect)
+        self.setText(conf["name"])
         self.group = "Effects"
-        self.clicked.connect(lambda: app.toggle_effect(effect_index))
+        self.clicked.connect(lambda: app.toggle_effect(conf["id"]))
+
+
+class Checkbox(QCheckBox):
+    def __init__(self, app: QMainWindow, conf) -> None:
+        """_summary_
+
+        Args:
+            app (QMainWindow): The Qt application this radio is being added to
+            effect (str): The effect name. This is defined in the app.EFFECTS
+            effect_index (int): The number in the array
+        """
+        super().__init__()
+
+        self.setText(conf["name"])
+        self.clicked.connect(lambda: app.toggle_effect(conf["id"]))
+
 
 class Tabs():
     def __init__(self, app: QMainWindow) -> None:
