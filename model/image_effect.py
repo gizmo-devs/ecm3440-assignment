@@ -7,30 +7,28 @@ mask2x2 = np.array([[1,1],
                     [1,1]])
 
 mask3x3 = np.array([[1,1,1],
-                            [1,1,1],
-                            [1,1,1]])
+                    [1,1,1],
+                    [1,1,1]])
+mask4x4 = np.array([[1,1,1,1],
+                    [1,1,1,1],
+                    [1,1,1,1],
+                    [1,1,1,1]])
 
 mask5x5 = np.array([[1,1,1,1,1],
-                            [1,1,1,1,1],
-                            [1,1,1,1,1],
-                            [1,1,1,1,1],
-                            [1,1,1,1,1]])
+                    [1,1,1,1,1],
+                    [1,1,1,1,1],
+                    [1,1,1,1,1],
+                    [1,1,1,1,1]])
 
 def apply_effect(app, input):
     if 5 in app.effect:
-        if not app.facedetection:
-
-            app.convolutionMask = mask3x3
-            ## pass in the image path and the effect or use the defaults
-            
-            
-            app.facedetection == True
+        app.convolutionMask = mask5x5
             
         gray=cv.cvtColor(input,cv.COLOR_BGR2GRAY)
         faces=app.faceCascade.detectMultiScale(gray, 1.2,5)
         drawonme = input.copy()
         tempROI = input.copy() ## make it acopy for it case it is not there
-        nw, nh = (20, 20) 
+        nw, nh = (25, 25) 
         for(x,y,w,h) in faces:
             tempROI = input[y:y+h, x:x+w]
             height, width = tempROI.shape[:2]
